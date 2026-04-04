@@ -16,7 +16,7 @@
         .screen { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; transition: 0.5s; }
         .hidden { display: none !important; }
         
-        #notify-toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-150%); background: var(--accent); color: white; padding: 12px 24px; border-radius: 50px; font-weight: 800; z-index: 1000; transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; min-width: 200px; }
+        #notify-toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-150%); background: var(--accent); color: white; padding: 12px 24px; border-radius: 50px; font-weight: 800; z-index: 1000; transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; min-width: 250px; }
         #notify-toast.show { transform: translateX(-50%) translateY(0); }
 
         .btn-glow { background: var(--primary); color: white; width: 100%; padding: 14px; border-radius: 16px; font-weight: 800; transition: 0.3s; text-transform: uppercase; }
@@ -82,7 +82,10 @@
         </div>
         <div class="flex gap-2">
             <button onclick="toggleMic()" id="mic-btn" class="p-3 bg-slate-800 rounded-xl text-rose-500"><i class="fa fa-microphone-slash"></i></button>
-            <button onclick="toggleChat()" class="p-3 bg-slate-800 rounded-xl text-indigo-400"><i class="fa fa-comment"></i></button>
+            <button onclick="toggleChat()" class="relative p-3 bg-slate-800 rounded-xl text-indigo-400">
+                <i class="fa fa-comment"></i>
+                <span id="chat-badge" class="hidden absolute -top-1 -right-1 bg-rose-500 text-[8px] w-4 h-4 flex items-center justify-center rounded-full border border-white">0</span>
+            </button>
         </div>
     </div>
 
@@ -135,7 +138,7 @@
     const db = getDatabase(app);
     const rtc = { client: AgoraRTC.createClient({ mode: "rtc", codec: "vp8" }), localAudioTrack: null };
 
-    let myId, myName, myRoom, cardLimit = 3, amIHost = false, isVoice = false;
+    let myId, myName, myRoom, cardLimit = 3, amIHost = false, isVoice = false, unreadCount = 0;
 
     window.goToRooms = () => {
         myName = document.getElementById('username').value.trim();
@@ -170,16 +173,19 @@
             if(!data) { amIHost = true; } 
             else {
                 const ids = Object.keys(data);
+                if(myId && !ids.includes(myId)) {
+                    alert("You were removed from the room.");
+                    location.reload();
+                }
                 amIHost = ids[0] === myId;
-                if(!ids.includes(myId) && myId) location.reload(); // Removed by host
             }
             if(amIHost) document.getElementById('host-config').classList.remove('hidden');
             
             const players = data ? Object.values(data) : [];
             document.getElementById('lobby-list').innerHTML = players.map(p => `
-                <div class="group relative">
-                    <span class="px-3 py-1 bg-indigo-500/20 border border-indigo-500/30 rounded-full text-[10px] font-800 uppercase">${p.name}</span>
-                    ${amIHost && p.id !== myId ? `<button onclick="removePlayer('${p.id}')" class="text-rose-500 ml-1 text-[10px]"><i class="fa fa-times-circle"></i></button>` : ''}
+                <div class="flex items-center gap-1 bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/20">
+                    <span class="text-[10px] font-800 uppercase">${p.name}</span>
+                    ${amIHost && p.id !== myId ? `<button onclick="removePlayer('${p.id}', '${p.name}')" class="text-rose-500 text-[12px] ml-1"><i class="fa fa-times-circle"></i></button>` : ''}
                 </div>
             `).join('');
         });
@@ -193,7 +199,11 @@
         });
     }
 
-    window.removePlayer = (id) => remove(ref(db, `rooms/${myRoom}/players/${id}`));
+    window.removePlayer = (id, name) => {
+        if(confirm(`Kick ${name}?`)) {
+            remove(ref(db, `rooms/${myRoom}/players/${id}`));
+        }
+    };
 
     window.enterGame = () => {
         const myCard = document.getElementById('card-name').value.trim().toUpperCase();
@@ -211,46 +221,58 @@
         const toast = document.getElementById('notify-toast');
         toast.innerText = text;
         toast.classList.add('show');
-        setTimeout(() => toast.classList.remove('show'), 3000);
+        setTimeout(() => toast.classList.remove('show'), 4000);
     }
 
     function syncArena() {
         onValue(ref(db, `rooms/${myRoom}`), (snap) => {
             const data = snap.val(); if(!data) return;
-            const pIds = Object.keys(data.players);
+            const pIds = Object.keys(data.players || {});
             const playerList = pIds.map(id => data.players[id]);
             
             amIHost = pIds[0] === myId;
             document.getElementById('host-panel').classList.toggle('hidden', !amIHost);
 
             document.getElementById('active-players').innerHTML = playerList.map(p => `
-                <div class="flex flex-col items-center">
+                <div class="flex flex-col items-center cursor-pointer" onclick="${amIHost && p.id !== myId ? `removePlayer('${p.id}', '${p.name}')` : ''}">
                     <div class="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center border-2 ${p.isTalking ? 'border-rose-500 animate-pulse' : 'border-indigo-500/30'}">
                         <span class="font-800 text-indigo-400">${p.name[0]}</span>
                     </div>
                     <span class="text-[9px] font-800 mt-1 uppercase">${p.name}</span>
+                    <span class="text-[8px] text-emerald-400 font-800">PTS: ${p.score || 0}</span>
                 </div>
             `).join('');
 
-            const me = data.players[myId];
-            if(!me) location.reload(); // Host removed me
-            document.getElementById('score-display').innerText = `PTS: ${me.score || 0}`;
-            renderHand(me.hand || []);
+            const me = data.players ? data.players[myId] : null;
+            if(myId && !me) { location.reload(); }
+            
+            if(me) {
+                document.getElementById('score-display').innerText = `PTS: ${me.score || 0}`;
+                renderHand(me.hand || []);
+                const boostBtn = document.getElementById('boost-btn');
+                const isMatching = me.hand?.length === cardLimit && me.hand.every(v => v === me.hand[0]);
 
-            const boostBtn = document.getElementById('boost-btn');
-            const isMatching = me.hand?.length === cardLimit && me.hand.every(v => v === me.hand[0]);
+                if (data.boostTriggeredBy || isMatching) {
+                    boostBtn.style.display = 'block';
+                    const alreadyBoosted = data.boostRace && Object.values(data.boostRace).some(r => r.uid === myId);
+                    boostBtn.classList.toggle('locked', alreadyBoosted);
+                    document.getElementById('status-text').innerText = alreadyBoosted ? "BOOSTED! WAIT..." : "🚨 BOOST NOW!!";
+                } else {
+                    boostBtn.style.display = 'none';
+                    document.getElementById('status-text').innerText = "PASS CARDS TO MATCH";
+                }
+            }
 
-            if (data.boostTriggeredBy || isMatching) {
-                boostBtn.style.display = 'block';
-                const alreadyBoosted = data.boostRace && Object.values(data.boostRace).some(r => r.uid === myId);
-                boostBtn.classList.toggle('locked', alreadyBoosted);
-                document.getElementById('status-text').innerText = alreadyBoosted ? "BOOSTED! WAIT..." : "🚨 BOOST NOW!!";
-            } else {
-                boostBtn.style.display = 'none';
-                document.getElementById('status-text').innerText = "PASS CARDS TO MATCH";
+            if(data.gameEvent === "ROLLED") {
+                showNotify("CARDS ROLLED! GO!");
+                if(amIHost) update(ref(db, `rooms/${myRoom}`), { gameEvent: null });
             }
 
             if(data.isOver) showRank(playerList);
+            
+            if(data.lastWinner && !data.isOver) {
+                showNotify(`🏆 Round Winner: ${data.lastWinner}!`);
+            }
         });
     }
 
@@ -261,11 +283,17 @@
             players.forEach(p => { for(let i=0; i<cardLimit; i++) deck.push(p.cardType); });
             deck = deck.sort(() => Math.random() - 0.5);
 
+            const updates = {};
             players.forEach(p => {
-                update(ref(db, `rooms/${myRoom}/players/${p.id}`), { hand: deck.splice(0, cardLimit) });
+                updates[`rooms/${myRoom}/players/${p.id}/hand`] = deck.splice(0, cardLimit);
             });
-            update(ref(db, `rooms/${myRoom}`), { boostTriggeredBy: null, boostRace: null, isOver: false });
-            showNotify("CARDS ROLLED! GO!");
+            updates[`rooms/${myRoom}/boostTriggeredBy`] = null;
+            updates[`rooms/${myRoom}/boostRace`] = null;
+            updates[`rooms/${myRoom}/isOver`] = false;
+            updates[`rooms/${myRoom}/lastWinner`] = null;
+            updates[`rooms/${myRoom}/gameEvent`] = "ROLLED";
+
+            update(ref(db), updates);
         });
     };
 
@@ -310,43 +338,71 @@
     window.calcRank = async () => {
         const snap = await get(ref(db, `rooms/${myRoom}`));
         const data = snap.val();
+        if(!data.players) return;
+
+        // Raja Rani Logic: Sorting race by time
         const race = data.boostRace ? Object.values(data.boostRace).sort((a,b) => a.time - b.time) : [];
-        const rewardPts = [2000, 1500, 1000, 800, 500];
-        
-        // Notify Winner
-        if(race.length > 0) {
-            const winner = data.players[race[0].uid].name;
-            showNotify(`🏆 ${winner} is the Winner!`);
-        }
+        const rewards = [2000, 1500, 1000, 800, 500];
+        const firstWinnerId = race.length > 0 ? race[0].uid : null;
+        const winnerName = firstWinnerId ? data.players[firstWinnerId].name : "No one";
 
         const updates = {};
+        
+        // Award points based on boost order
         race.forEach((r, i) => {
-            const p = data.players[r.uid];
-            updates[`rooms/${myRoom}/players/${r.uid}/score`] = (p.score || 0) + (rewardPts[i] || 400);
+            const currentScore = data.players[r.uid].score || 0;
+            const pointsToAdd = i < rewards.length ? rewards[i] : 400;
+            updates[`rooms/${myRoom}/players/${r.uid}/score`] = currentScore + pointsToAdd;
         });
 
-        // Set others to 400 if they didn't boost
-        Object.keys(data.players).forEach(id => {
-            const didBoost = race.find(r => r.uid === id);
-            if(!didBoost) updates[`rooms/${myRoom}/players/${id}/score`] = (data.players[id].score || 0) + 400;
+        // Non-boosters get basic participation points
+        Object.keys(data.players).forEach(pId => {
+            const boosted = race.find(r => r.uid === pId);
+            if(!boosted) {
+                const currentScore = data.players[pId].score || 0;
+                updates[`rooms/${myRoom}/players/${pId}/score`] = currentScore + 400;
+            }
         });
 
+        // NOTIFY CHAT: Send winning message to system chat before showing rank
+        const chatRef = ref(db, `rooms/${myRoom}/chat`);
+        push(chatRef, { u: "SYSTEM", t: `🏆 ${winnerName} WON THIS ROUND!` });
+
+        updates[`rooms/${myRoom}/isOver`] = true;
+        updates[`rooms/${myRoom}/lastWinner`] = winnerName;
+        
         await update(ref(db), updates);
-        update(ref(db, `rooms/${myRoom}`), { isOver: true });
     };
 
-    // Chat Logic
     function initChat() {
         onChildAdded(ref(db, `rooms/${myRoom}/chat`), (snap) => {
             const m = snap.val();
             const div = document.getElementById('chat-msgs');
-            div.innerHTML += `<div><b class="text-indigo-400">${m.u}:</b> ${m.t}</div>`;
+            const isSystem = m.u === "SYSTEM";
+            div.innerHTML += `<div><b class="${isSystem ? 'text-yellow-400' : 'text-indigo-400'}">${m.u}:</b> ${m.t}</div>`;
             div.scrollTop = div.scrollHeight;
-            if(m.u !== myName) showNotify(`💬 ${m.u}: ${m.t}`);
+
+            if(m.u !== myName) {
+                showNotify(`💬 ${m.u}: ${m.t}`);
+                if(document.getElementById('chat-box').classList.contains('hidden')) {
+                    unreadCount++;
+                    const badge = document.getElementById('chat-badge');
+                    badge.innerText = unreadCount;
+                    badge.classList.remove('hidden');
+                }
+            }
         });
     }
 
-    window.toggleChat = () => document.getElementById('chat-box').classList.toggle('hidden');
+    window.toggleChat = () => {
+        const box = document.getElementById('chat-box');
+        box.classList.toggle('hidden');
+        if(!box.classList.contains('hidden')) {
+            unreadCount = 0;
+            document.getElementById('chat-badge').classList.add('hidden');
+        }
+    };
+
     window.sendMsg = () => {
         const input = document.getElementById('chat-input');
         if(!input.value.trim()) return;
@@ -359,7 +415,10 @@
         const sorted = list.sort((a,b) => (b.score || 0) - (a.score || 0));
         document.getElementById('rank-list').innerHTML = sorted.map((p, i) => `
             <div class="flex justify-between items-center p-4 bg-white/5 rounded-2xl border border-white/10">
-                <span class="font-800">#${i+1} ${p.name}</span>
+                <div class="flex items-center gap-3">
+                    <span class="text-indigo-400 font-800">#${i+1}</span>
+                    <span class="font-800 uppercase text-sm">${p.name}</span>
+                </div>
                 <span class="text-emerald-400 font-800">${p.score} PTS</span>
             </div>
         `).join('');
