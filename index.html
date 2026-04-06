@@ -22,13 +22,18 @@
         .btn-glow { background: var(--primary); color: white; width: 100%; padding: 14px; border-radius: 16px; font-weight: 800; transition: 0.3s; text-transform: uppercase; }
         .btn-glow:active { transform: scale(0.95); }
 
-        .card { width: 75px; height: 110px; background: white; color: #1e293b; border-radius: 15px; display: flex; align-items: center; justify-content: center; font-weight: 900; cursor: pointer; border: 4px solid var(--primary); transition: 0.2s; font-size: 0.7rem; text-align: center; padding: 5px; }
+        .card { width: 75px; height: 110px; background: white; color: #1e293b; border-radius: 15px; display: flex; align-items: center; justify-content: center; font-weight: 900; cursor: pointer; border: 4px solid var(--primary); transition: 0.2s; font-size: 0.7rem; text-align: center; padding: 5px; position: relative; }
+        .card:hover { transform: translateY(-5px); border-color: var(--accent); }
         
         #boost-btn { height: 80px; font-size: 1.5rem; background: var(--secondary); width: 100%; max-width: 300px; display: none; animation: pulse 0.8s infinite; border-radius: 20px; margin-top: 20px; z-index: 100; }
         @keyframes pulse { 0% { transform: scale(1); } 70% { transform: scale(1.05); } 100% { transform: scale(1); } }
         .locked { filter: grayscale(1); opacity: 0.5; pointer-events: none; }
 
         #chat-box { position: fixed; bottom: 100px; right: 20px; width: 280px; height: 350px; z-index: 500; display: flex; flex-direction: column; overflow: hidden; border-radius: 24px; border: 1px solid rgba(255,255,255,0.1); }
+        
+        .turn-highlight { border: 3px solid var(--accent) !important; box-shadow: 0 0 15px var(--accent); }
+        .my-turn-ring { animation: borderPulse 1.5s infinite; }
+        @keyframes borderPulse { 0% { box-shadow: 0 0 0px var(--accent); } 50% { box-shadow: 0 0 20px var(--accent); } 100% { box-shadow: 0 0 0px var(--accent); } }
     </style>
 </head>
 <body>
@@ -92,7 +97,12 @@
     <div id="active-players" class="mt-20 flex flex-wrap justify-center gap-4"></div>
     <h3 id="status-text" class="text-yellow-400 font-800 text-center my-6 text-sm uppercase tracking-widest">Wait for Host...</h3>
 
-    <div class="flex gap-2 flex-wrap justify-center" id="my-hand"></div>
+    <div class="flex gap-2 flex-wrap justify-center mb-4" id="my-hand"></div>
+    
+    <div id="turn-indicator" class="hidden px-6 py-2 rounded-full bg-white/10 border border-white/20 text-[10px] font-800 uppercase tracking-tighter mb-4">
+        Waiting for turn...
+    </div>
+
     <button id="boost-btn" class="btn-glow" onclick="pressBoost()">🚀 BOOST!!</button>
 
     <div id="host-panel" class="hidden fixed bottom-10 flex gap-3 px-6 w-full max-w-sm">
@@ -150,7 +160,7 @@
     window.createRoom = () => {
         myRoom = Math.random().toString(36).substring(2, 6).toUpperCase();
         amIHost = true;
-        set(ref(db, `rooms/${myRoom}/config`), { cardLimit: 3, moves: 0 });
+        set(ref(db, `rooms/${myRoom}/config`), { cardLimit: 3, turnIndex: 0 });
         enterConfig();
     };
 
@@ -230,30 +240,33 @@
         onValue(ref(db, `rooms/${myRoom}`), (snap) => {
             const data = snap.val(); if(!data) return;
             const pIds = Object.keys(data.players || {});
-            amIHost = pIds[0] === myId;
-            document.getElementById('host-panel').classList.toggle('hidden', !amIHost);
-
             const playerList = pIds.map(id => data.players[id]);
             const totalPlayers = playerList.length;
+            const currentTurnIdx = data.config?.turnIndex || 0;
+            const activePlayerId = pIds[currentTurnIdx];
+
+            amIHost = pIds[0] === myId;
+            document.getElementById('host-panel').classList.toggle('hidden', !amIHost);
 
             if(amIHost) {
                 const raceCount = data.boostRace ? Object.keys(data.boostRace).length : 0;
                 const canRoll = !data.boostTriggeredBy || (raceCount >= totalPlayers);
                 document.getElementById('roll-btn').disabled = !canRoll;
                 
-                // FIX 1: LOCK SYSTEM FOR CALCULATIONS
                 if (data.boostRace && raceCount === totalPlayers && !data.roundCalculated) {
                     update(ref(db, `rooms/${myRoom}`), { roundCalculated: true });
                     calculatePointsSync(data);
                 }
             }
 
-            document.getElementById('active-players').innerHTML = playerList.map(p => `
+            document.getElementById('active-players').innerHTML = playerList.map((p, idx) => `
                 <div class="flex flex-col items-center relative">
-                    <div class="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center border-2 ${p.isTalking ? 'border-rose-500 animate-pulse' : 'border-indigo-500/30'}">
+                    <div class="w-12 h-12 bg-slate-800 rounded-full flex items-center justify-center border-2 
+                        ${idx === currentTurnIdx ? 'turn-highlight border-emerald-400' : 'border-indigo-500/30'} 
+                        ${p.isTalking ? 'animate-pulse ring-2 ring-rose-500' : ''}">
                         <span class="font-800 text-indigo-400">${p.name[0]}</span>
                     </div>
-                    <span class="text-[9px] font-800 mt-1 uppercase">${p.name}</span>
+                    <span class="text-[9px] font-800 mt-1 uppercase ${idx === currentTurnIdx ? 'text-emerald-400' : ''}">${p.name}</span>
                     <span class="text-[8px] text-emerald-400 font-800">PTS: ${p.score || 0}</span>
                 </div>
             `).join('');
@@ -261,14 +274,24 @@
             const me = data.players ? data.players[myId] : null;
             if(me) {
                 document.getElementById('score-display').innerText = `PTS: ${me.score || 0}`;
-                renderHand(me.hand || []);
+                const isMyTurn = activePlayerId === myId;
+                renderHand(me.hand || [], isMyTurn);
                 
+                const turnIndicator = document.getElementById('turn-indicator');
+                turnIndicator.classList.remove('hidden');
+                if(isMyTurn) {
+                    turnIndicator.innerText = "⭐ YOUR TURN TO PASS ⭐";
+                    turnIndicator.classList.add('text-emerald-400');
+                } else {
+                    const activeName = data.players[activePlayerId]?.name || "...";
+                    turnIndicator.innerText = `Waiting for ${activeName}...`;
+                    turnIndicator.classList.remove('text-emerald-400');
+                }
+
                 const boostBtn = document.getElementById('boost-btn');
                 const isMatching = me.hand?.length === cardLimit && me.hand.every(v => v === me.hand[0]);
-                const totalMoves = data.config?.moves || 0;
-                const rotated = totalMoves >= totalPlayers;
-
-                if (data.boostTriggeredBy || (isMatching && rotated)) {
+                
+                if (data.boostTriggeredBy || isMatching) {
                     boostBtn.style.display = 'block';
                     const alreadyBoosted = data.boostRace && Object.values(data.boostRace).some(r => r.uid === myId);
                     boostBtn.classList.toggle('locked', alreadyBoosted);
@@ -279,35 +302,22 @@
                     }
                 } else {
                     boostBtn.style.display = 'none';
-                    document.getElementById('status-text').innerText = rotated ? "PASS TO MATCH" : `ROTATING... (${totalMoves}/${totalPlayers})`;
+                    document.getElementById('status-text').innerText = "KEEP PASSING!";
                 }
             }
 
             if(data.gameEvent === "ROLLED") {
-                showNotify("CARDS ROLLED! START!");
+                showNotify("GAME STARTED! PASS CARDS!");
                 if(amIHost) update(ref(db, `rooms/${myRoom}`), { gameEvent: null });
             }
 
-            // FIX 3: PREVENT MULTIPLE ANNOUNCEMENTS CLIENT-SIDE
             if(data.gameEvent === "ROUND_END" && data.lastWinner && !window.lastAnnouncedWinner) {
                 window.lastAnnouncedWinner = data.lastWinner;
                 showNotify(`🏆 ${data.lastWinner} WON THE ROUND!`);
-                
-                confetti({
-                    particleCount: 250,
-                    spread: 100,
-                    startVelocity: 50,
-                    origin: { y: 0.6 }
-                });
-
-                setTimeout(() => {
-                    window.lastAnnouncedWinner = null;
-                }, 3000);
-
+                confetti({ particleCount: 250, spread: 100, origin: { y: 0.6 } });
+                setTimeout(() => { window.lastAnnouncedWinner = null; }, 3000);
                 if(amIHost) {
-                    setTimeout(() => update(ref(db, `rooms/${myRoom}`), {
-                        gameEvent: "CLEANUP"
-                    }), 1500);
+                    setTimeout(() => update(ref(db, `rooms/${myRoom}`), { gameEvent: "CLEANUP" }), 1500);
                 }
             }
             
@@ -331,15 +341,10 @@
         updates[`rooms/${myRoom}/lastWinner`] = winnerName;
         updates[`rooms/${myRoom}/gameEvent`] = "ROUND_END";
         
-        // FIX 4: PREVENT DUPLICATE CHAT MESSAGES
         if(!data.roundAnnounced){
-            push(ref(db, `rooms/${myRoom}/chat`), { 
-                u: "SYSTEM", 
-                t: `🏆 ${winnerName} won this round!` 
-            });
+            push(ref(db, `rooms/${myRoom}/chat`), { u: "SYSTEM", t: `🏆 ${winnerName} won this round!` });
             updates[`rooms/${myRoom}/roundAnnounced`] = true;
         }
-
         update(ref(db), updates);
     }
 
@@ -359,10 +364,8 @@
             updates[`rooms/${myRoom}/boostTriggeredBy`] = null;
             updates[`rooms/${myRoom}/boostRace`] = null;
             updates[`rooms/${myRoom}/lastWinner`] = null;
-            updates[`rooms/${myRoom}/config/moves`] = 0;
+            updates[`rooms/${myRoom}/config/turnIndex`] = 0;
             updates[`rooms/${myRoom}/gameEvent`] = "ROLLED";
-
-            // FIX 2: RESET LOCKS
             updates[`rooms/${myRoom}/roundCalculated`] = false;
             updates[`rooms/${myRoom}/roundAnnounced`] = false;
 
@@ -370,14 +373,14 @@
         });
     };
 
-    function renderHand(hand) {
+    function renderHand(hand, isMyTurn) {
         const container = document.getElementById('my-hand');
         container.innerHTML = '';
         hand.forEach((c, i) => {
             const div = document.createElement('div');
-            div.className = 'card';
-            div.innerText = c;
-            div.onclick = () => passCard(i, hand);
+            div.className = `card ${isMyTurn ? 'my-turn-ring' : 'locked'}`;
+            div.innerHTML = `<span>${c}</span>`;
+            if(isMyTurn) div.onclick = () => passCard(i, hand);
             container.appendChild(div);
         });
     }
@@ -387,20 +390,24 @@
         const data = snap.val();
         if(data.boostTriggeredBy) return; 
 
-        const players = Object.values(data.players);
-        const myIdx = players.findIndex(p => p.id === myId);
-        const nextP = players[(myIdx + 1) % players.length];
+        const pIds = Object.keys(data.players);
+        const currentTurnIdx = data.config.turnIndex;
+        
+        // Ensure it's actually my turn
+        if(pIds[currentTurnIdx] !== myId) return;
+
+        const nextTurnIdx = (currentTurnIdx + 1) % pIds.length;
+        const nextPId = pIds[nextTurnIdx];
         
         let newMe = [...hand];
         const card = newMe.splice(idx, 1)[0];
-        let nextHand = nextP.hand || [];
+        let nextHand = data.players[nextPId].hand || [];
         
-        if(nextHand.length >= cardLimit + 1) return;
-
         const updates = {};
         updates[`rooms/${myRoom}/players/${myId}/hand`] = newMe;
-        updates[`rooms/${myRoom}/players/${nextP.id}/hand`] = [...nextHand, card];
-        updates[`rooms/${myRoom}/config/moves`] = increment(1);
+        updates[`rooms/${myRoom}/players/${nextPId}/hand`] = [...nextHand, card];
+        updates[`rooms/${myRoom}/config/turnIndex`] = nextTurnIdx;
+        
         update(ref(db), updates);
     }
 
