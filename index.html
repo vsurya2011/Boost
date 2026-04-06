@@ -19,21 +19,23 @@
         #notify-toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-150%); background: var(--accent); color: white; padding: 12px 24px; border-radius: 50px; font-weight: 800; z-index: 1000; transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; min-width: 250px; }
         #notify-toast.show { transform: translateX(-50%) translateY(0); }
 
-        .btn-glow { background: var(--primary); color: white; width: 100%; padding: 14px; border-radius: 16px; font-weight: 800; transition: 0.3s; text-transform: uppercase; }
+        .btn-glow { background: var(--primary); color: white; width: 100%; padding: 14px; border-radius: 16px; font-weight: 800; transition: 0.3s; text-transform: uppercase; border: none; cursor: pointer; }
         .btn-glow:active { transform: scale(0.95); }
 
-        .card { width: 75px; height: 110px; background: white; color: #1e293b; border-radius: 15px; display: flex; align-items: center; justify-content: center; font-weight: 900; cursor: pointer; border: 4px solid var(--primary); transition: 0.2s; font-size: 0.7rem; text-align: center; padding: 5px; position: relative; }
-        .card:hover { transform: translateY(-5px); border-color: var(--accent); }
+        /* Mobile Responsive Cards */
+        .card { width: 22vw; max-width: 80px; aspect-ratio: 2/3; background: white; color: #1e293b; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 900; cursor: pointer; border: 3px solid var(--primary); transition: 0.2s; font-size: 0.8rem; text-align: center; padding: 4px; position: relative; }
+        .card:active { transform: scale(0.9); }
         
-        #boost-btn { height: 80px; font-size: 1.5rem; background: var(--secondary); width: 100%; max-width: 300px; display: none; animation: pulse 0.8s infinite; border-radius: 20px; margin-top: 20px; z-index: 100; }
-        @keyframes pulse { 0% { transform: scale(1); } 70% { transform: scale(1.05); } 100% { transform: scale(1); } }
+        #boost-btn { height: 70px; font-size: 1.4rem; background: var(--secondary); width: 90%; max-width: 300px; display: none; animation: pulse 0.8s infinite; border-radius: 20px; margin-top: 15px; z-index: 100; box-shadow: 0 0 20px rgba(244, 63, 94, 0.4); }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
         .locked { filter: grayscale(1); opacity: 0.5; pointer-events: none; }
 
-        #chat-box { position: fixed; bottom: 100px; right: 20px; width: 280px; height: 350px; z-index: 500; display: flex; flex-direction: column; overflow: hidden; border-radius: 24px; border: 1px solid rgba(255,255,255,0.1); }
+        #chat-box { position: fixed; bottom: 90px; right: 15px; left: 15px; height: 350px; z-index: 500; display: flex; flex-direction: column; overflow: hidden; border-radius: 24px; border: 1px solid rgba(255,255,255,0.1); }
+        @media (min-width: 640px) { #chat-box { left: auto; width: 300px; } }
         
         .turn-highlight { border: 3px solid var(--accent) !important; box-shadow: 0 0 15px var(--accent); }
         .my-turn-ring { animation: borderPulse 1.5s infinite; }
-        @keyframes borderPulse { 0% { box-shadow: 0 0 0px var(--accent); } 50% { box-shadow: 0 0 20px var(--accent); } 100% { box-shadow: 0 0 0px var(--accent); } }
+        @keyframes borderPulse { 0% { box-shadow: 0 0 0px var(--accent); } 50% { box-shadow: 0 0 15px var(--accent); } 100% { box-shadow: 0 0 0px var(--accent); } }
     </style>
 </head>
 <body>
@@ -44,7 +46,7 @@
     <div class="glass p-8 rounded-[32px] w-full max-w-sm text-center">
         <h1 class="text-5xl font-800 mb-2 text-indigo-500 uppercase tracking-tighter">BOOST DA!</h1>
         <p class="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-6">Multiplayer Speed Game</p>
-        <input type="text" id="username" placeholder="Nickname" class="w-full bg-slate-800 border border-slate-700 p-4 rounded-2xl outline-none mb-4 text-center">
+        <input type="text" id="username" placeholder="Nickname" class="w-full bg-slate-800 border border-slate-700 p-4 rounded-2xl outline-none mb-4 text-center text-white">
         <button class="btn-glow" onclick="goToRooms()">NEXT</button>
     </div>
 </div>
@@ -56,7 +58,7 @@
         <div class="flex items-center gap-2 mb-4">
             <hr class="flex-1 opacity-20"> <span class="text-[10px] font-800 opacity-40">OR</span> <hr class="flex-1 opacity-20">
         </div>
-        <input type="text" id="join-code" placeholder="4-Digit Code" maxlength="4" class="w-full bg-slate-800 border border-slate-700 p-4 rounded-2xl outline-none mb-4 text-center uppercase">
+        <input type="text" id="join-code" placeholder="4-Digit Code" maxlength="4" class="w-full bg-slate-800 border border-slate-700 p-4 rounded-2xl outline-none mb-4 text-center uppercase text-white">
         <button class="btn-glow" onclick="joinRoom()">JOIN ROOM</button>
     </div>
 </div>
@@ -74,7 +76,7 @@
             </div>
         </div>
 
-        <input type="text" id="card-name" placeholder="Your Secret Word (e.g. LION)" class="w-full bg-slate-800 p-4 rounded-2xl mb-4 text-center">
+        <input type="text" id="card-name" placeholder="Your Secret Word (e.g. LION)" class="w-full bg-slate-800 p-4 rounded-2xl mb-4 text-center text-white">
         <button class="btn-glow" onclick="enterGame()">READY TO PLAY</button>
     </div>
 </div>
@@ -94,10 +96,10 @@
         </div>
     </div>
 
-    <div id="active-players" class="mt-20 flex flex-wrap justify-center gap-4"></div>
-    <h3 id="status-text" class="text-yellow-400 font-800 text-center my-6 text-sm uppercase tracking-widest">Wait for Host...</h3>
+    <div id="active-players" class="mt-20 flex flex-wrap justify-center gap-4 px-4"></div>
+    <h3 id="status-text" class="text-yellow-400 font-800 text-center my-6 text-sm uppercase tracking-widest px-4">Wait for Host...</h3>
 
-    <div class="flex gap-2 flex-wrap justify-center mb-4" id="my-hand"></div>
+    <div class="flex gap-2 justify-center mb-6 px-4" id="my-hand"></div>
     
     <div id="turn-indicator" class="hidden px-6 py-2 rounded-full bg-white/10 border border-white/20 text-[10px] font-800 uppercase tracking-tighter mb-4">
         Waiting for turn...
@@ -105,7 +107,7 @@
 
     <button id="boost-btn" class="btn-glow" onclick="pressBoost()">🚀 BOOST!!</button>
 
-    <div id="host-panel" class="hidden fixed bottom-10 flex gap-3 px-6 w-full max-w-sm">
+    <div id="host-panel" class="hidden fixed bottom-6 flex gap-3 px-6 w-full max-w-sm">
         <button id="roll-btn" onclick="rollGame()" class="flex-1 py-4 bg-emerald-500 rounded-2xl font-800 shadow-lg disabled:opacity-30">🎲 ROLL</button>
         <button onclick="showFinalRank()" class="px-6 py-4 bg-rose-500 rounded-2xl font-800 shadow-lg">🔚 END</button>
     </div>
@@ -118,7 +120,7 @@
     </div>
     <div id="chat-msgs" class="flex-1 overflow-y-auto p-4 space-y-2 text-[12px]"></div>
     <div class="p-2 bg-slate-900 flex gap-2">
-        <input type="text" id="chat-input" placeholder="Type..." class="flex-1 bg-transparent border-none outline-none text-xs">
+        <input type="text" id="chat-input" placeholder="Type..." class="flex-1 bg-transparent border-none outline-none text-xs text-white">
         <button onclick="sendMsg()" class="text-indigo-400 p-2"><i class="fa fa-paper-plane"></i></button>
     </div>
 </div>
@@ -288,16 +290,13 @@
                     turnIndicator.classList.remove('text-emerald-400');
                 }
 
-                // --- BOOST VISIBILITY LOGIC ---
                 const boostBtn = document.getElementById('boost-btn');
                 const isMatching = me.hand?.length === cardLimit && me.hand.every(v => v === me.hand[0]);
                 
                 if (data.boostTriggeredBy || isMatching) {
                     boostBtn.style.display = 'block';
-                    // Check if I already pushed it
                     const raceEntries = data.boostRace ? Object.values(data.boostRace) : [];
                     const alreadyBoosted = raceEntries.some(r => r.uid === myId);
-                    
                     boostBtn.classList.toggle('locked', alreadyBoosted);
                     
                     if (isMatching && !data.boostTriggeredBy && !alreadyBoosted) {
@@ -330,7 +329,7 @@
     }
 
     async function calculatePointsSync(data) {
-        // Sort race entries by the time they hit the database
+        // ✅ SORT BY TIME (The Fix)
         const race = Object.values(data.boostRace).sort((a,b) => a.time - b.time);
         const rewards = [2000, 1500, 1000, 500];
         const updates = {};
@@ -395,7 +394,6 @@
     async function passCard(idx, hand) {
         const snap = await get(ref(db, `rooms/${myRoom}`));
         const data = snap.val();
-        // Stop passing if someone started the boost phase
         if(data.boostTriggeredBy) return; 
 
         const pIds = Object.keys(data.players);
@@ -418,32 +416,26 @@
     }
 
     window.pressBoost = async () => {
-        // Get fresh data to check if already triggered or already in race
         const snap = await get(ref(db, `rooms/${myRoom}`));
         const data = snap.val();
         const me = data.players[myId];
         
-        // 1. Check if I already pushed it
         const raceEntries = data.boostRace ? Object.values(data.boostRace) : [];
         const alreadyInRace = raceEntries.some(r => r.uid === myId);
         if(alreadyInRace) return;
 
-        // 2. Logic: Am I the FIRST person matching cards?
         const isMatching = me.hand?.length === cardLimit && me.hand.every(v => v === me.hand[0]);
         
-        // If I match and nobody has triggered the boost yet, I am the winner-trigger
         if (isMatching && !data.boostTriggeredBy) {
             await update(ref(db, `rooms/${myRoom}`), { boostTriggeredBy: myId });
-        } 
-        // If someone else triggered it, OR I just matched, I add myself to the race
-        else if (!data.boostTriggeredBy && !isMatching) {
-            // Cannot boost if not matching and nobody else started it
+        } else if (!data.boostTriggeredBy && !isMatching) {
             return;
         }
 
-        // Add this user to the race with a timestamp
+        // ✅ UNIQUE TIMESTAMP FIX
+        const time = Date.now() + Math.random();
         const raceRef = ref(db, `rooms/${myRoom}/boostRace`);
-        push(raceRef, { uid: myId, time: Date.now() });
+        push(raceRef, { uid: myId, time: time });
     };
 
     window.showFinalRank = () => {
