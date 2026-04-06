@@ -288,14 +288,16 @@
                     turnIndicator.classList.remove('text-emerald-400');
                 }
 
-                // --- BOOST LOGIC UPDATE ---
+                // --- BOOST VISIBILITY LOGIC ---
                 const boostBtn = document.getElementById('boost-btn');
                 const isMatching = me.hand?.length === cardLimit && me.hand.every(v => v === me.hand[0]);
                 
-                // Rule: If someone has already boosted OR you are the first one to match cards
                 if (data.boostTriggeredBy || isMatching) {
                     boostBtn.style.display = 'block';
-                    const alreadyBoosted = data.boostRace && Object.values(data.boostRace).some(r => r.uid === myId);
+                    // Check if I already pushed it
+                    const raceEntries = data.boostRace ? Object.values(data.boostRace) : [];
+                    const alreadyBoosted = raceEntries.some(r => r.uid === myId);
+                    
                     boostBtn.classList.toggle('locked', alreadyBoosted);
                     
                     if (isMatching && !data.boostTriggeredBy && !alreadyBoosted) {
@@ -321,9 +323,6 @@
                 showNotify(`🏆 ${data.lastWinner} WON THE ROUND!`);
                 confetti({ particleCount: 250, spread: 100, origin: { y: 0.6 } });
                 setTimeout(() => { window.lastAnnouncedWinner = null; }, 3000);
-                if(amIHost) {
-                    setTimeout(() => update(ref(db, `rooms/${myRoom}`), { gameEvent: "CLEANUP" }), 1500);
-                }
             }
             
             if(data.isFinalOver) showRank(playerList);
@@ -331,6 +330,7 @@
     }
 
     async function calculatePointsSync(data) {
+        // Sort race entries by the time they hit the database
         const race = Object.values(data.boostRace).sort((a,b) => a.time - b.time);
         const rewards = [2000, 1500, 1000, 500];
         const updates = {};
@@ -342,7 +342,9 @@
             updates[`rooms/${myRoom}/players/${pId}/score`] = currentScore + points;
         });
 
-        const winnerName = data.players[race[0].uid].name;
+        const winnerId = race[0].uid;
+        const winnerName = data.players[winnerId].name;
+        
         updates[`rooms/${myRoom}/lastWinner`] = winnerName;
         updates[`rooms/${myRoom}/gameEvent`] = "ROUND_END";
         
@@ -393,6 +395,7 @@
     async function passCard(idx, hand) {
         const snap = await get(ref(db, `rooms/${myRoom}`));
         const data = snap.val();
+        // Stop passing if someone started the boost phase
         if(data.boostTriggeredBy) return; 
 
         const pIds = Object.keys(data.players);
@@ -415,21 +418,30 @@
     }
 
     window.pressBoost = async () => {
+        // Get fresh data to check if already triggered or already in race
         const snap = await get(ref(db, `rooms/${myRoom}`));
         const data = snap.val();
         const me = data.players[myId];
-        const isMatching = me.hand?.length === cardLimit && me.hand.every(v => v === me.hand[0]);
         
-        // Check if I'm already in the race
-        const alreadyInRace = data.boostRace && Object.values(data.boostRace).some(r => r.uid === myId);
+        // 1. Check if I already pushed it
+        const raceEntries = data.boostRace ? Object.values(data.boostRace) : [];
+        const alreadyInRace = raceEntries.some(r => r.uid === myId);
         if(alreadyInRace) return;
 
-        // If I'm the FIRST one to match, I trigger the event for everyone else
-        if(isMatching && !data.boostTriggeredBy) {
+        // 2. Logic: Am I the FIRST person matching cards?
+        const isMatching = me.hand?.length === cardLimit && me.hand.every(v => v === me.hand[0]);
+        
+        // If I match and nobody has triggered the boost yet, I am the winner-trigger
+        if (isMatching && !data.boostTriggeredBy) {
             await update(ref(db, `rooms/${myRoom}`), { boostTriggeredBy: myId });
+        } 
+        // If someone else triggered it, OR I just matched, I add myself to the race
+        else if (!data.boostTriggeredBy && !isMatching) {
+            // Cannot boost if not matching and nobody else started it
+            return;
         }
 
-        // Add me to the speed race
+        // Add this user to the race with a timestamp
         const raceRef = ref(db, `rooms/${myRoom}/boostRace`);
         push(raceRef, { uid: myId, time: Date.now() });
     };
