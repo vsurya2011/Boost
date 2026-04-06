@@ -288,17 +288,22 @@
                     turnIndicator.classList.remove('text-emerald-400');
                 }
 
+                // --- BOOST LOGIC UPDATE ---
                 const boostBtn = document.getElementById('boost-btn');
                 const isMatching = me.hand?.length === cardLimit && me.hand.every(v => v === me.hand[0]);
                 
+                // Rule: If someone has already boosted OR you are the first one to match cards
                 if (data.boostTriggeredBy || isMatching) {
                     boostBtn.style.display = 'block';
                     const alreadyBoosted = data.boostRace && Object.values(data.boostRace).some(r => r.uid === myId);
                     boostBtn.classList.toggle('locked', alreadyBoosted);
-                    document.getElementById('status-text').innerText = alreadyBoosted ? "WAITING FOR OTHERS..." : "🚨 BOOST NOW!!";
                     
-                    if(isMatching && !data.boostTriggeredBy && !alreadyBoosted) {
-                        update(ref(db, `rooms/${myRoom}`), { boostTriggeredBy: myId });
+                    if (isMatching && !data.boostTriggeredBy && !alreadyBoosted) {
+                        document.getElementById('status-text').innerText = "🔥 YOU MATCHED! BOOST FIRST!";
+                    } else if (data.boostTriggeredBy && !alreadyBoosted) {
+                        document.getElementById('status-text').innerText = "🚨 SOMEONE BOOSTED! HURRY!!";
+                    } else {
+                        document.getElementById('status-text').innerText = "WAITING FOR OTHERS...";
                     }
                 } else {
                     boostBtn.style.display = 'none';
@@ -392,8 +397,6 @@
 
         const pIds = Object.keys(data.players);
         const currentTurnIdx = data.config.turnIndex;
-        
-        // Ensure it's actually my turn
         if(pIds[currentTurnIdx] !== myId) return;
 
         const nextTurnIdx = (currentTurnIdx + 1) % pIds.length;
@@ -411,7 +414,22 @@
         update(ref(db), updates);
     }
 
-    window.pressBoost = () => {
+    window.pressBoost = async () => {
+        const snap = await get(ref(db, `rooms/${myRoom}`));
+        const data = snap.val();
+        const me = data.players[myId];
+        const isMatching = me.hand?.length === cardLimit && me.hand.every(v => v === me.hand[0]);
+        
+        // Check if I'm already in the race
+        const alreadyInRace = data.boostRace && Object.values(data.boostRace).some(r => r.uid === myId);
+        if(alreadyInRace) return;
+
+        // If I'm the FIRST one to match, I trigger the event for everyone else
+        if(isMatching && !data.boostTriggeredBy) {
+            await update(ref(db, `rooms/${myRoom}`), { boostTriggeredBy: myId });
+        }
+
+        // Add me to the speed race
         const raceRef = ref(db, `rooms/${myRoom}/boostRace`);
         push(raceRef, { uid: myId, time: Date.now() });
     };
