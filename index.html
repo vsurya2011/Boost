@@ -301,11 +301,12 @@
         });
     }
 
-    // CONTINUOUS SCORING: Preserve scores explicitly
+    // UPDATED: Preserve scores when rolling new cards
     window.rollGame = () => {
         get(ref(db, `rooms/${myRoom}`)).then(snap => {
             const data = snap.val();
             const players = Object.values(data.players);
+            const totalPlayers = players.length;
             
             let deck = [];
             players.forEach(p => { for(let i=0; i<cardLimit; i++) deck.push(p.cardType); });
@@ -314,8 +315,7 @@
             const updates = {};
             players.forEach(p => {
                 updates[`rooms/${myRoom}/players/${p.id}/hand`] = deck.splice(0, cardLimit);
-                // Ensure score is carried over and not touched
-                updates[`rooms/${myRoom}/players/${p.id}/score`] = p.score || 0;
+                // DO NOT reset updates[`rooms/${myRoom}/players/${p.id}/score`] here
             });
             
             updates[`rooms/${myRoom}/boostTriggeredBy`] = null;
@@ -375,7 +375,7 @@
         });
     };
 
-    // SCORING LOGIC: Increment based on current DB values
+    // UPDATED: Incremental score logic
     async function checkAndCalculatePoints() {
         const snap = await get(ref(db, `rooms/${myRoom}`));
         const data = snap.val();
@@ -392,9 +392,9 @@
             sortedRace.forEach((r, i) => {
                 const pId = r.uid;
                 const points = i < rewards.length ? rewards[i] : 200;
-                // Mechanical increment: Current + Reward
-                const currentTotal = data.players[pId].score || 0;
-                updates[`rooms/${myRoom}/players/${pId}/score`] = currentTotal + points;
+                // Add points to current score from DB
+                const currentScore = data.players[pId].score || 0;
+                updates[`rooms/${myRoom}/players/${pId}/score`] = currentScore + points;
             });
 
             const winnerName = data.players[sortedRace[0].uid].name;
